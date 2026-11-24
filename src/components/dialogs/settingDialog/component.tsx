@@ -47,23 +47,28 @@ class SettingDialog extends React.Component<
   ) => {
     const isActive = this.props.settingMode === mode;
     return (
-      <div
+      <button
+        type="button"
+        aria-current={isActive ? "page" : undefined}
         className={"setting-dialog-sidebar-item" + (isActive ? " active" : "")}
         onClick={() => {
           this.props.handleSettingMode(mode);
         }}
       >
         <span
+          aria-hidden="true"
           className={"setting-dialog-sidebar-icon " + iconClass}
           style={fontSize ? { fontSize } : {}}
         ></span>
         <Trans>{labelKey}</Trans>
-      </div>
+      </button>
     );
   };
 
   getCurrentPageTitle = () => {
     switch (this.props.settingMode) {
+      case "data":
+        return "Data";
       case "general":
         return "General";
       case "reading":
@@ -98,8 +103,27 @@ class SettingDialog extends React.Component<
   render() {
     return (
       <div className="setting-dialog-container">
+        <div className="setting-dialog-top-header">
+          <div className="setting-dialog-mobile-title">
+            <Trans>{this.getCurrentPageTitle()}</Trans>
+          </div>
+          <button
+            type="button"
+            className="setting-close-container"
+            aria-label={this.props.t("Close")}
+            onClick={() => {
+              this.props.handleSetting(false);
+              this.props.handleSettingMode("general");
+            }}
+          >
+            <span className="icon-close setting-close" aria-hidden="true" />
+          </button>
+        </div>
         {/* 左侧导航栏 */}
-        <div className="setting-dialog-sidebar">
+        <nav
+          className="setting-dialog-sidebar"
+          aria-label={this.props.t("Setting")}
+        >
           <div className="setting-dialog-sidebar-title">
             <Trans>Setting</Trans>
           </div>
@@ -174,22 +198,12 @@ class SettingDialog extends React.Component<
                 "18px"
               )}
           </div>
-        </div>
+        </nav>
 
         {/* 右侧主内容区 */}
         <div className="setting-dialog-main">
           <div className="setting-dialog-main-header">
             <Trans>{this.getCurrentPageTitle()}</Trans>
-          </div>
-
-          <div
-            className="setting-close-container"
-            onClick={() => {
-              this.props.handleSetting(false);
-              this.props.handleSettingMode("general");
-            }}
-          >
-            <span className="icon-close setting-close"></span>
           </div>
 
           <div className="setting-dialog-info" ref={this.contentRef}>

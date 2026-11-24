@@ -159,7 +159,7 @@ class SettingDialog extends React.Component<
   };
   render() {
     return (
-      <>
+      <div className="setting-plugin-content">
         {this.state.isAddNew && (
           <div
             className="voice-add-new-container"
@@ -373,7 +373,9 @@ class SettingDialog extends React.Component<
                       const containerRect =
                         scrollContainer.getBoundingClientRect();
                       const refRect = ref.getBoundingClientRect();
-                      const tabBarHeight = 40;
+                      const tabBarHeight =
+                        scrollContainer.querySelector(".plugin-tab-bar")
+                          ?.getBoundingClientRect().height || 40;
                       scrollContainer.scrollTop +=
                         refRect.top - containerRect.top - tabBarHeight;
                     }
@@ -591,15 +593,17 @@ class SettingDialog extends React.Component<
           })}
 
         <div className="setting-dialog-new-plugin">
-          <span
+          <button
+            type="button"
             style={{ textDecoration: "underline", marginRight: "20px" }}
             onClick={() => {
               openExternalUrl(this.getPluginTutorialUrl());
             }}
           >
             <Trans>Visit online version</Trans>
-          </span>
-          <span
+          </button>
+          <button
+            type="button"
             style={{ textDecoration: "underline" }}
             onClick={() => {
               if (
@@ -617,8 +621,9 @@ class SettingDialog extends React.Component<
             }}
           >
             <Trans>How to custom plugin</Trans>
-          </span>
-          <span
+          </button>
+          <button
+            type="button"
             style={{ marginLeft: "20px", fontWeight: "bold" }}
             onClick={async () => {
               const infoEl = document.querySelector(".setting-dialog-info");
@@ -628,9 +633,9 @@ class SettingDialog extends React.Component<
             }}
           >
             <Trans>Add custom plugin</Trans>
-          </span>
+          </button>
         </div>
-      </>
+      </div>
     );
   }
 }
