@@ -1,4 +1,6 @@
 import React from "react";
+import { isAndroid } from "../../platform";
+import { takeReaderLibraryReturn } from "../../utils/reader/androidReaderNavigation";
 import Sidebar from "../../containers/sidebar";
 import Header from "../../containers/header";
 import DeleteDialog from "../../components/dialogs/deleteDialog";
@@ -87,6 +89,19 @@ class Manager extends React.Component<ManagerProps, ManagerState> {
     document.addEventListener("dragstart", this.handleDocumentDragStart, true);
     document.addEventListener("dragend", this.handleDocumentDragEnd, true);
     document.addEventListener("dragenter", this.handleExternalDragEnter, true);
+    const restored = isAndroid() ? takeReaderLibraryReturn() : null;
+    if (restored) {
+      const mode = restored.hash.split("?")[0].split("/").pop() || "home";
+      const shelves = ConfigService.getAllMapConfig("shelfList") || {};
+      if (mode === "shelf" && !Object.prototype.hasOwnProperty.call(shelves, restored.shelfTitle)) {
+        this.props.history.replace("/manager/home");
+        this.props.handleMode("home");
+      } else {
+        if (mode === "shelf") this.props.handleShelf(restored.shelfTitle);
+        this.props.handleMode(mode === "empty" ? "home" : mode);
+      }
+      return;
+    }
     // Auto switch to configured startup shelf
     const startupShelf = ConfigService.getReaderConfig("startupShelf");
     if (startupShelf) {

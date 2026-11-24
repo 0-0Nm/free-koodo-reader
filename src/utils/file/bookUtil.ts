@@ -13,6 +13,9 @@ import { getCloudConfig } from "./common";
 import CoverUtil from "./coverUtil";
 import { LocalFileManager } from "./localFile";
 import TokenService from "../storage/tokenService";
+import { isAndroid } from "../../platform";
+import store from "../../store";
+import { openAndroidReader } from "../reader/androidReaderNavigation";
 declare var window: any;
 
 class BookUtil {
@@ -331,6 +334,7 @@ class BookUtil {
     BookUtil.startNextDownload();
 
     let ref = book.format.toLowerCase();
+    if (isAndroid() && openAndroidReader(ref, book.key, book.name, store.getState().sidebar.shelfTitle)) return;
 
     if (isElectron) {
       if (ConfigService.getReaderConfig("isOpenInMain") === "yes") {

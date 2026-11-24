@@ -97,15 +97,17 @@ export const searchInTheBook = (
   format: string,
   isSearch: boolean
 ) => {
-  let leftPanel = document.querySelector(".left-panel");
-  if (!leftPanel) return;
-  leftPanel.dispatchEvent(clickEvent());
+  openReadingPanel("left", () => submitBookSearch(keyword, format, isSearch));
+};
+
+const submitBookSearch = (keyword: string, format: string, isSearch: boolean) => {
   const focusEvent = new MouseEvent("focus", {
     view: window,
     bubbles: true,
     cancelable: true,
   });
-  let searchBox: any = document.querySelector(".header-search-box");
+  const searchBox = document.querySelector<HTMLInputElement>(".header-search-box");
+  if (!searchBox) return;
   searchBox.dispatchEvent(focusEvent);
   let searchIcon = document.querySelector(".header-search-icon");
   searchIcon?.dispatchEvent(clickEvent());
@@ -140,12 +142,22 @@ const SELECTION_SHORTCUT_OPTIONS: Array<{
 
 export const READING_PANEL_TOGGLE_EVENT = "koodo-reading-panel-toggle";
 
+export const READING_PANEL_OPEN_EVENT = "koodo-reading-panel-open";
+
 export const openReadingPanel = (
-  position: "left" | "right" | "top" | "bottom"
+  position: "left" | "right" | "top" | "bottom",
+  onOpen?: () => void
 ) => {
+  const request = new CustomEvent(READING_PANEL_OPEN_EVENT, {
+    cancelable: true,
+    detail: { position, onOpen },
+  });
+  // Mobile Reader consumes the request and calls onOpen after React commits.
+  if (!window.dispatchEvent(request)) return;
   const panel = document.querySelector(`.${position}-panel`);
   if (!panel) return;
   panel.dispatchEvent(clickEvent());
+  onOpen?.();
 };
 
 export const toggleReadingPanel = (

@@ -25,8 +25,14 @@ import {
   updateDiscordPresence,
   clearDiscordPresence,
 } from "../../utils/reader/discordRPC";
-import { READING_PANEL_TOGGLE_EVENT } from "../../utils/reader/mouseEvent";
-import { isMobileDevice } from "../../platform";
+import {
+  READING_PANEL_OPEN_EVENT,
+  READING_PANEL_TOGGLE_EVENT,
+} from "../../utils/reader/mouseEvent";
+import { isAndroid, isCapacitor, isMobileDevice } from "../../platform";
+import TTSUtil from "../../utils/reader/ttsUtil";
+import { bindAndroidReaderBack } from "../../utils/reader/androidReaderNavigation";
+import { Trans } from "react-i18next";
 import { throttle } from "../../utils/common";
 declare var window: any;
 let lock = false; //prevent from clicking too fasts
@@ -66,7 +72,25 @@ const PANEL_OPEN_STATE: Record<
   top: "isOpenTopPanel",
   bottom: "isOpenBottomPanel",
 };
-class Reader extends React.Component<ReaderProps, ReaderState> {
+type MobilePanel = PanelPosition | "tools";
+const MOBILE_PANEL_LABEL: Record<MobilePanel, string> = {
+  left: "Contents",
+  bottom: "Reading Progress",
+  right: "Reading Settings",
+  top: "Reading Options",
+  tools: "More",
+};
+class Reader extends React.Component<
+  ReaderProps & {
+    mobilePopupOpen?: boolean;
+    handleSetting: (open: boolean) => void;
+    handleSettingMode: (mode: string) => void;
+    handlePopupOptionDialog: (open: boolean) => void;
+  },
+  ReaderState & { mobileChrome: boolean; mobilePanel: MobilePanel | null }
+> {
+  private readonly mobileReader = isCapacitor();
+  private androidBack?: ReturnType<typeof bindAndroidReaderBack>;
   messageTimer!: NodeJS.Timeout;
   tickTimer!: NodeJS.Timeout;
   private autoShowTimer: NodeJS.Timeout | null = null;
@@ -115,9 +139,14 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
         ConfigService.getReaderConfig("isPreventTrigger") === "yes",
       isShowScale: false,
       isNearEdge: false,
+      mobileChrome: true,
+      mobilePanel: null,
     };
   }
   componentDidMount() {
+    if (isAndroid()) {
+      this.androidBack = bindAndroidReaderBack(this.closeReaderLayer, this.prepareReaderExit);
+    }
     if (ConfigService.getReaderConfig("isMergeWord") === "yes") {
       document
         .querySelector("body")
@@ -148,6 +177,9 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
     };
     const throttledMouseMove = throttle(handleMouseMove, 100);
     window.addEventListener("mousemove", throttledMouseMove);
+    if (this.mobileReader) {
+      window.addEventListener(READING_PANEL_OPEN_EVENT, this.openMobilePanel);
+    }
     window.addEventListener(
       READING_PANEL_TOGGLE_EVENT,
       this.handleReadingPanelToggle
@@ -216,6 +248,8 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
   }
 
   componentWillUnmount() {
+    this.androidBack?.dispose();
+    window.removeEventListener(READING_PANEL_OPEN_EVENT, this.openMobilePanel);
     window.removeEventListener(
       READING_PANEL_TOGGLE_EVENT,
       this.handleReadingPanelToggle
@@ -263,6 +297,7 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
   };
 
   scheduleLeaveReader = (position: string) => {
+    if (this.mobileReader) return;
     this.cancelLeaveReader(position);
     leaveTimers[position] = setTimeout(() => {
       leaveTimers[position] = null;
@@ -288,7 +323,76 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
     this.setState({ hoverPanel: "" });
   };
 
+  closeReaderLayer = () => {
+    if (this.props.isOpenPopupOptionDialog) this.props.handlePopupOptionDialog(false);
+    else if (this.props.isSettingOpen) {
+      this.props.handleSetting(false);
+      this.props.handleSettingMode("general");
+    } else if (this.props.isConvertOpen) this.props.handleConvertDialog(false);
+    else if (this.props.isPdfCropOpen) this.props.handlePdfCropDialog(false);
+    else if (this.props.isAnnotationOpen) {
+      this.props.htmlBook?.rendition.applyAnnotationConfig({ isDrawing: "no" });
+      this.props.handleAnnotationDialog(false);
+    } else if (this.props.isSpeechOpen) this.props.handleSpeechDialog(false);
+    else if (this.props.mobilePopupOpen) this.props.handleOpenMenu(false);
+    else if (this.state.mobilePanel) this.closeMobilePanel();
+    else return false;
+    return true;
+  };
+  prepareReaderExit = () => {
+    const { currentBook, htmlBook } = this.props;
+    try {
+      if (currentBook.key && htmlBook?.key === currentBook.key) {
+        const position = htmlBook.rendition.getPosition();
+        if (position && typeof position === "object") {
+          ConfigService.setObjectConfig(currentBook.key, position, "recordLocation");
+        }
+      }
+    } finally {
+      this.readingTimeUtil.stop();
+      window.speechSynthesis?.cancel();
+      void TTSUtil.stopAudio();
+    }
+  };
+  openMobilePanel = (event: Event) => {
+    const detail = (event as CustomEvent<{
+      position: PanelPosition;
+      onOpen?: () => void;
+    }>).detail;
+    if (!detail || !PANEL_POSITIONS.includes(detail.position)) return;
+    event.preventDefault();
+    this.setState(
+      { mobileChrome: true, mobilePanel: detail.position },
+      () => detail.onOpen?.()
+    );
+  };
+  showMobilePanel = (position: MobilePanel) => {
+    this.setState((state) => ({
+      mobileChrome: true,
+      mobilePanel: state.mobilePanel === position ? null : position,
+    }));
+  };
+  closeMobilePanel = () => this.setState({ mobilePanel: null });
+  toggleMobileChrome = () => {
+    if (
+      !this.mobileReader ||
+      this.props.isSettingOpen ||
+      this.props.isConvertOpen ||
+      this.props.isPdfCropOpen ||
+      this.props.isSpeechOpen ||
+      this.props.isAnnotationOpen ||
+      this.props.isOpenPopupOptionDialog
+    ) return;
+    this.setState((state) => ({
+      mobilePanel: null,
+      mobileChrome: state.mobilePanel ? true : !state.mobileChrome,
+    }));
+  };
   handleEnterReader = (position: string) => {
+    if (this.mobileReader && PANEL_POSITIONS.includes(position as PanelPosition)) {
+      this.setState({ mobileChrome: true, mobilePanel: position as PanelPosition });
+      return;
+    }
     this.cancelEnterReader(position);
     this.cancelLeaveReader(position);
     switch (position) {
@@ -317,6 +421,10 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
     }
   };
   handleLeaveReader = (position: string) => {
+    if (this.mobileReader) {
+      if (this.state.mobilePanel === position) this.closeMobilePanel();
+      return;
+    }
     this.cancelLeaveReader(position);
     switch (position) {
       case "right":
@@ -351,6 +459,10 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
     const position = (event as CustomEvent<{ position: string }>).detail
       ?.position;
     if (!PANEL_POSITIONS.includes(position as PanelPosition)) return;
+    if (this.mobileReader) {
+      this.showMobilePanel(position as PanelPosition);
+      return;
+    }
     const stateKey = PANEL_OPEN_STATE[position as PanelPosition];
     if (this.state[stateKey]) {
       this.handleLeaveReader(position);
@@ -369,18 +481,55 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
   };
   render() {
     const renditionProps = {
+      onMobileBodyTap: this.mobileReader ? this.toggleMobileChrome : undefined,
       handleLeaveReader: this.handleLeaveReader,
       handleEnterReader: this.handleEnterReader,
-      isShow:
-        this.state.isOpenLeftPanel ||
-        this.state.isOpenTopPanel ||
-        this.state.isOpenBottomPanel ||
-        this.state.isOpenRightPanel,
+      isShow: this.mobileReader
+        ? this.state.mobilePanel !== null
+        : this.state.isOpenLeftPanel || this.state.isOpenTopPanel ||
+          this.state.isOpenBottomPanel || this.state.isOpenRightPanel,
     };
     return (
-      <div className="viewer">
+      <div
+        className={this.mobileReader ? "viewer mobile-reader" : "viewer"}
+        data-reader-panel={this.mobileReader ? this.state.mobilePanel || "none" : undefined}
+      >
+        {this.mobileReader && this.state.mobileChrome && (
+          <>
+            <header className="mobile-reader-topbar">
+              {isAndroid() && (
+                <button type="button" onClick={() => this.androidBack?.back()}>
+                  <Trans>Back</Trans>
+                </button>
+              )}
+              <button type="button" onClick={() => this.showMobilePanel("top")}>
+                <Trans>Reading Options</Trans>
+              </button>
+              <span className="mobile-reader-book-title">{this.props.currentBook.name}</span>
+            </header>
+            <nav className="mobile-reader-bottombar">
+              {(["left", "bottom", "right", "tools"] as const).map((position) => (
+                <button type="button" key={position}
+                  aria-expanded={this.state.mobilePanel === position}
+                  onClick={() => this.showMobilePanel(position)}>
+                  <Trans>{MOBILE_PANEL_LABEL[position]}</Trans>
+                </button>
+              ))}
+            </nav>
+          </>
+        )}
+        {this.mobileReader && this.state.mobilePanel && (
+          <>
+            <div className="mobile-reader-scrim" onClick={this.closeMobilePanel} />
+            <div className="mobile-reader-sheet-header">
+              <strong><Trans>{MOBILE_PANEL_LABEL[this.state.mobilePanel]}</Trans></strong>
+              <button type="button" onClick={this.closeMobilePanel}><Trans>Close</Trans></button>
+            </div>
+          </>
+        )}
         <Tooltip id="my-tooltip" style={{ zIndex: 25 }} />
 
+        <div className="mobile-reader-tools">
         <div
           className="previous-chapter-single-container"
           onClick={async () => {
@@ -398,9 +547,10 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
           onMouseEnter={() => this.setState({ isNearEdge: true })}
           onMouseLeave={() => this.setState({ isNearEdge: false })}
         >
-          <span className="icon-dropdown previous-chapter-single"></span>
+          <span className="icon-dropdown previous-chapter-single"></span><span className="mobile-reader-tool-label"><Trans>Previous Page</Trans></span>
         </div>
         <div
+          className="mobile-reader-tool-row"
           style={{
             position: "absolute",
             bottom: 10,
@@ -428,7 +578,7 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
             }}
             style={{ position: "static" }}
           >
-            <span className="icon-dropdown next-chapter-single"></span>
+            <span className="icon-dropdown next-chapter-single"></span><span className="mobile-reader-tool-label"><Trans>Next Page</Trans></span>
           </div>
           <div
             className="next-chapter-single-container"
@@ -444,7 +594,7 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                   : {}
               }
               className={`icon-${this.props.isSpeechOpen ? "close" : "earphone"} next-chapter-single`}
-            ></span>
+            ></span><span className="mobile-reader-tool-label"><Trans>Text to Speech</Trans></span>
           </div>
           {ConfigService.getReaderConfig("isDisableAI") !== "yes" && (
             <div
@@ -490,12 +640,13 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                       : { fontSize: "17px" }
                   }
                   className={`icon-${this.props.isAnnotationOpen ? "close" : "edit"} next-chapter-single`}
-                ></span>
+                ></span><span className="mobile-reader-tool-label"><Trans>Annotation</Trans></span>
               </div>
             )}
         </div>
 
         <div
+          className="mobile-reader-tool-row"
           style={{
             position: "absolute",
             top: "0px",
@@ -607,7 +758,7 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                   this.setState({ isShowScale: !this.state.isShowScale });
                 }}
               >
-                <span className="icon-zoom-in reader-setting-icon"></span>
+                <span className="icon-zoom-in reader-setting-icon"></span><span className="mobile-reader-tool-label"><Trans>Zoom</Trans></span>
               </div>
             </div>
           )}
@@ -623,7 +774,7 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                 <span
                   className="icon-crop reader-setting-icon"
                   style={{ fontSize: 24 }}
-                ></span>
+                ></span><span className="mobile-reader-tool-label"><Trans>Crop</Trans></span>
               </div>
             )}
 
@@ -638,10 +789,11 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                 className="icon-convert-text reader-setting-icon"
                 style={{ fontSize: 26 }}
               ></span>
+              <span className="mobile-reader-tool-label"><Trans>Convert</Trans></span>
             </div>
           )}
           <div
-            className="reader-setting-icon-container"
+            className="reader-setting-icon-container mobile-reader-desktop-grid"
             onClick={() => {
               this.handleEnterReader("left");
               this.handleEnterReader("right");
@@ -654,6 +806,7 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
               style={{ opacity: 1 }}
             ></span>
           </div>
+        </div>
         </div>
         {this.props.isSettingOpen && (
           <>

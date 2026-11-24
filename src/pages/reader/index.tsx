@@ -16,6 +16,9 @@ import {
   handleFetchAuthed,
   handleFetchUserInfo,
   handleBackgroundColor,
+  handleSetting,
+  handleSettingMode,
+  handlePopupOptionDialog,
 } from "../../store/actions";
 import { connect } from "react-redux";
 import { stateType } from "../../store";
@@ -32,6 +35,7 @@ const mapStateToProps = (state: stateType) => {
     isConvertOpen: state.reader.isConvertOpen,
     isPdfCropOpen: state.reader.isPdfCropOpen,
     isSpeechOpen: state.reader.isSpeechOpen,
+    mobilePopupOpen: state.viewArea.isOpenMenu,
     isAnnotationOpen: state.reader.isAnnotationOpen,
     isOpenPopupOptionDialog: state.backupPage.isOpenPopupOptionDialog,
     isSettingLocked: state.reader.isSettingLocked,
@@ -61,6 +65,9 @@ const actionCreator = {
   handleAnnotationDialog,
   handleFetchUserInfo,
   handleBackgroundColor,
+  handleSetting,
+  handleSettingMode,
+  handlePopupOptionDialog,
 };
 export default connect(
   mapStateToProps,

@@ -41,7 +41,10 @@ import {
 declare var window: any;
 let lock = false; //prevent from clicking too fasts
 
-class Viewer extends React.Component<ViewerProps, ViewerState> {
+type MobileViewerProps = ViewerProps & { onMobileBodyTap?: () => void };
+class Viewer extends React.Component<MobileViewerProps, ViewerState> {
+  private readonly readerTapDocs = new WeakSet<Document>();
+  private readonly readerTapAbort = new AbortController();
   private resizeHandler: (() => void) | null = null;
   private _pendingRerender = false;
   lock: boolean;
@@ -118,6 +121,7 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
     window.addEventListener("resize", this.resizeHandler);
   }
   componentWillUnmount() {
+    this.readerTapAbort.abort();
     if (this.resizeHandler) {
       window.removeEventListener("resize", this.resizeHandler);
       this.resizeHandler = null;
@@ -565,6 +569,37 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
       "recordLocation"
     );
   };
+  bindMobileBodyTap = (doc: Document) => {
+    if (this.readerTapDocs.has(doc)) return;
+    this.readerTapDocs.add(doc);
+    const signal = this.readerTapAbort.signal;
+    let start: { id: number; x: number; y: number; at: number } | null = null;
+    let ready = false;
+    doc.addEventListener("pointerdown", (event) => {
+      ready = false;
+      start = event.isPrimary && event.pointerType === "touch"
+        ? { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() }
+        : null;
+    }, { passive: true, signal });
+    doc.addEventListener("pointercancel", () => { start = null; ready = false; }, { signal });
+    doc.addEventListener("pointerup", (event) => {
+      ready = !!start && start.id === event.pointerId && Date.now() - start.at < 350 &&
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) < 10;
+      start = null;
+    }, { passive: true, signal });
+    doc.addEventListener("click", (event) => {
+      if (!ready) return;
+      ready = false;
+      const target = event.target as Element | null;
+      if (event.defaultPrevented || doc.getSelection()?.toString().trim() ||
+        target?.closest?.("a,button,input,select,textarea,summary,video,audio,[role=button],[contenteditable]")) return;
+      const width = doc.defaultView?.innerWidth || 0;
+      const height = doc.defaultView?.innerHeight || 0;
+      if (!width || !height || event.clientX < width * 0.2 || event.clientX > width * 0.8 ||
+        event.clientY < height * 0.1 || event.clientY > height * 0.9) return;
+      this.props.onMobileBodyTap?.();
+    }, { signal });
+  };
   handleBindGesture = () => {
     let docs = getIframeDoc(
       this.props.currentBook.format,
@@ -573,7 +608,9 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
     for (let i = 0; i < docs.length; i++) {
       let doc = docs[i];
       if (!doc) continue;
-      doc.addEventListener("click", () => {
+      if (this.props.onMobileBodyTap) {
+        this.bindMobileBodyTap(doc);
+      } else doc.addEventListener("click", () => {
         this.props.handleLeaveReader("left");
         this.props.handleLeaveReader("right");
         this.props.handleLeaveReader("top");

@@ -1,4 +1,6 @@
 import React from "react";
+import { isAndroid } from "../../../platform";
+import { ANDROID_READER_BACK_EVENT } from "../../../utils/reader/androidReaderNavigation";
 import "./operationPanel.css";
 import Bookmark from "../../../models/Bookmark";
 import { Trans } from "react-i18next";
@@ -87,6 +89,10 @@ class OperationPanel extends React.Component<
     }
   }
   async handleExit() {
+    if (isAndroid()) {
+      const request = new Event(ANDROID_READER_BACK_EVENT, { cancelable: true });
+      if (!window.dispatchEvent(request)) return;
+    }
     ConfigService.setReaderConfig("isFullscreen", "no");
     this.props.handleReadingState(false);
     this.props.handleSearch(false);
