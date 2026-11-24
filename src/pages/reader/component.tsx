@@ -80,13 +80,14 @@ const MOBILE_PANEL_LABEL: Record<MobilePanel, string> = {
   top: "Reading Options",
   tools: "More",
 };
-class Reader extends React.Component<
-  ReaderProps & {
+type ReaderComponentProps = ReaderProps & {
     mobilePopupOpen?: boolean;
     handleSetting: (open: boolean) => void;
     handleSettingMode: (mode: string) => void;
     handlePopupOptionDialog: (open: boolean) => void;
-  },
+};
+class Reader extends React.Component<
+  ReaderComponentProps,
   ReaderState & { mobileChrome: boolean; mobilePanel: MobilePanel | null }
 > {
   private readonly mobileReader = isCapacitor();
@@ -123,7 +124,7 @@ class Reader extends React.Component<
           },
         }
   );
-  constructor(props: ReaderProps) {
+  constructor(props: ReaderComponentProps) {
     super(props);
     this.state = {
       isOpenTopPanel: false,
