@@ -44,14 +44,21 @@ class Sidebar extends React.Component<SidebarProps, SidebarState> {
     // Narrow screens (Android phones / small desktop windows) keep the
     // sidebar collapsed so the content area stays usable.
     window.addEventListener("resize", this.handleNarrowResize);
+    this.handleNarrowResize();
   }
   componentWillUnmount() {
     document.removeEventListener("dragend", this.handleDocumentDragEnd);
     window.removeEventListener("resize", this.handleNarrowResize);
   }
   handleNarrowResize = () => {
-    if (isNarrowScreen() && !this.state.isCollapsed) {
-      this.handleCollapse(true);
+    // The icon rail is a viewport constraint, not a saved desktop choice.
+    const isCollapsed =
+      isNarrowScreen() || ConfigService.getReaderConfig("isCollapsed") === "yes";
+    if (isCollapsed !== this.state.isCollapsed) {
+      this.setState({ isCollapsed });
+    }
+    if (isCollapsed !== this.props.isCollapsed) {
+      this.props.handleCollapse(isCollapsed);
     }
   };
   handleDocumentDragEnd = () => {

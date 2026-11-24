@@ -19,6 +19,7 @@
   .header {
     margin-left: 70px !important; /* collapsed sidebar icon strip */
     height: 64px !important;
+    width: calc(100% - 70px) !important;
   }
   .header-search-container {
     position: absolute !important;
@@ -26,8 +27,15 @@
     left: 80px !important;
     right: 150px !important;
     width: auto !important;
-    min-width: 120px !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
     margin-left: 0 !important;
+  }
+  .header-search-container input {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .setting-icon-parrent {
     position: absolute !important;
@@ -116,23 +124,49 @@
     width: 88px !important;
   }
 
-  /* ---- "card" shelf view (small covers): two evenly centred columns ----- */
+  /* ---- "card" shelf view: upstream-like left alignment, safe 1x size.
+     The UL (not its outer container) owns the cards. TSX also sets cover
+     heights / placeholder sizes inline from the saved desktop cardScale;
+     cap those here rather than changing preferences or scaling actions. */
   .book-list-container {
-    justify-content: space-evenly;
-    row-gap: 10px;
+    justify-content: flex-start;
+  }
+  .book-list-item-box {
+    /* Keep the shared UL's existing layout for cover / list views. */
+    --card-scale: 1 !important;
   }
   .book-list-item {
-    width: calc(50% - 12px) !important;
-    max-width: 170px;
+    flex: 0 0 133px;
+    float: left;
+    margin-bottom: 10px;
+    width: 133px !important;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
-  .book-item-cover {
-    margin-left: auto !important;
-    margin-right: auto !important;
+  .book-list-item > .book-item-cover {
+    width: 105px !important;
+    height: 137px !important;
+    max-width: calc(100% - 28px);
+    margin: 10px 14px 5px !important;
+  }
+  .book-list-item > .book-item-cover > div {
+    /* EmptyCover's wrapper also receives inline desktop dimensions. */
+    width: 105px !important;
+    height: 137px !important;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+  .book-list-item .book-item-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
   }
   .book-item-title {
-    width: 94% !important;
-    margin-left: 3% !important;
-    text-align: center;
+    width: 80% !important;
+    margin-left: 10% !important;
+    text-align: left;
   }
 
   /* ---- "cover" view (cover + metadata side by side): one fluid row,
@@ -327,7 +361,8 @@
   body .progress-panel-container {
     width: 100vw !important;
     max-width: 450px;
-    left: 0 !important;
+    /* Retain the desktop centering once the viewport exceeds the cap. */
+    left: max(0px, calc((100vw - 450px) / 2)) !important;
     /* Ignore the desktop "shift away from a locked side panel" offsets. */
     margin-left: 0 !important;
   }
