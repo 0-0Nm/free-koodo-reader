@@ -346,3 +346,9 @@
   gap: 6px;
 }
 .mobile-reader .mobile-reader-tool-label { display: inline; }
+
+.mobile-reader-topbar button { flex: 0 0 auto; white-space: nowrap; }
+.mobile-reader-book-title { flex: 1 1 auto; }
+.mobile-reader-bottombar button:first-child,
+.mobile-reader-bottombar button:last-child { flex: 0 0 48px; font-size: 25px; }
+.mobile-reader-bottombar button:disabled { opacity: 0.4; }

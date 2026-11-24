@@ -33,7 +33,7 @@ import * as Kookit from "../../assets/lib/kookit.min";
 import PopupRefer from "../../components/popups/popupRefer";
 import DatabaseService from "../../utils/storage/databaseService";
 import { BookHelper } from "../../assets/lib/kookit.min";
-import { isMobileDevice } from "../../platform";
+import { isAndroid, isMobileDevice } from "../../platform";
 import {
   parseWithExternalOcrApi,
   parseWithSystemOCR,
@@ -43,6 +43,7 @@ let lock = false; //prevent from clicking too fasts
 
 type MobileViewerProps = ViewerProps & { onMobileBodyTap?: () => void };
 class Viewer extends React.Component<MobileViewerProps, ViewerState> {
+  private mobilePageTurning = false;
   private readonly readerTapDocs = new WeakSet<Document>();
   private readonly readerTapAbort = new AbortController();
   private resizeHandler: (() => void) | null = null;
@@ -573,31 +574,73 @@ class Viewer extends React.Component<MobileViewerProps, ViewerState> {
     if (this.readerTapDocs.has(doc)) return;
     this.readerTapDocs.add(doc);
     const signal = this.readerTapAbort.signal;
-    let start: { id: number; x: number; y: number; at: number } | null = null;
-    let ready = false;
+    type Sample = { id: number; x: number; y: number; at: number };
+    let start: Sample | null = null;
+    let active = 0;
+    let pending: { x: number; y: number; at: number } | null = null;
+    const blocked = (target: EventTarget | null) =>
+      (target as Element | null)?.closest?.("a,button,input,select,textarea,summary,video,audio,label,[role=button],[contenteditable]") ||
+      doc.getSelection()?.toString().trim() ||
+      document.querySelector('.mobile-reader:not([data-reader-panel="none"])');
+    const canPage = () => {
+      const format = this.props.currentBook.format.toUpperCase();
+      return isAndroid() && this.props.readerMode !== "scroll" &&
+        ["EPUB", "TXT", "MD", "FB2", "MOBI", "AZW", "AZW3", "DOCX"].includes(format);
+    };
+    const turn = async (forward: boolean) => {
+      const book = this.props.htmlBook;
+      if (!book || book.key !== this.props.currentBook.key || this.mobilePageTurning) return;
+      this.mobilePageTurning = true;
+      try {
+        if (forward) await book.rendition.next();
+        else await book.rendition.prev();
+        if (this.props.htmlBook === book) this.handleLocation();
+      } catch (error) {
+        console.warn("Mobile page turn failed", error);
+      } finally {
+        this.mobilePageTurning = false;
+      }
+    };
     doc.addEventListener("pointerdown", (event) => {
-      ready = false;
-      start = event.isPrimary && event.pointerType === "touch"
+      if (event.pointerType !== "touch") return;
+      active++;
+      pending = null;
+      start = active === 1 && event.isPrimary && !blocked(event.target)
         ? { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() }
         : null;
     }, { passive: true, signal });
-    doc.addEventListener("pointercancel", () => { start = null; ready = false; }, { signal });
-    doc.addEventListener("pointerup", (event) => {
-      ready = !!start && start.id === event.pointerId && Date.now() - start.at < 350 &&
-        Math.hypot(event.clientX - start.x, event.clientY - start.y) < 10;
+    doc.addEventListener("pointercancel", (event) => {
+      if (event.pointerType !== "touch") return;
+      active = Math.max(0, active - 1);
       start = null;
+      pending = null;
+    }, { passive: true, signal });
+    doc.addEventListener("pointerup", (event) => {
+      if (event.pointerType !== "touch") return;
+      active = Math.max(0, active - 1);
+      const origin = start;
+      start = null;
+      if (!origin || origin.id !== event.pointerId || active || blocked(event.target)) return;
+      const dx = event.clientX - origin.x;
+      const dy = event.clientY - origin.y;
+      const elapsed = Date.now() - origin.at;
+      const width = doc.defaultView?.innerWidth || 0;
+      if (!width || origin.x < 24 || origin.x > width - 24) return;
+      if (canPage() && elapsed < 700 && Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        void turn(dx < 0);
+      } else if (elapsed < 350 && Math.hypot(dx, dy) < 10) {
+        pending = { x: event.clientX, y: event.clientY, at: Date.now() };
+      }
     }, { passive: true, signal });
     doc.addEventListener("click", (event) => {
-      if (!ready) return;
-      ready = false;
-      const target = event.target as Element | null;
-      if (event.defaultPrevented || doc.getSelection()?.toString().trim() ||
-        target?.closest?.("a,button,input,select,textarea,summary,video,audio,[role=button],[contenteditable]")) return;
+      const tap = pending;
+      pending = null;
+      if (!tap || Date.now() - tap.at > 450 || event.defaultPrevented || blocked(event.target)) return;
       const width = doc.defaultView?.innerWidth || 0;
       const height = doc.defaultView?.innerHeight || 0;
-      if (!width || !height || event.clientX < width * 0.2 || event.clientX > width * 0.8 ||
-        event.clientY < height * 0.1 || event.clientY > height * 0.9) return;
-      this.props.onMobileBodyTap?.();
+      if (!width || !height || tap.y < height * 0.1 || tap.y > height * 0.9) return;
+      if (tap.x >= width * 0.25 && tap.x <= width * 0.75) this.props.onMobileBodyTap?.();
+      else if (canPage()) void turn(tap.x > width * 0.75);
     }, { signal });
   };
   handleBindGesture = () => {

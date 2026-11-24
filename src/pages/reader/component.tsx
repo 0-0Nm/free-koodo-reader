@@ -75,8 +75,8 @@ const PANEL_OPEN_STATE: Record<
 type MobilePanel = PanelPosition | "tools";
 const MOBILE_PANEL_LABEL: Record<MobilePanel, string> = {
   left: "Contents",
-  bottom: "Reading Progress",
-  right: "Reading Settings",
+  bottom: "Progress",
+  right: "Settings",
   top: "Reading Options",
   tools: "More",
 };
@@ -374,6 +374,20 @@ class Reader extends React.Component<
     }));
   };
   closeMobilePanel = () => this.setState({ mobilePanel: null });
+  turnMobilePage = async (forward: boolean) => {
+    const book = this.props.htmlBook;
+    if (!book || book.key !== this.props.currentBook.key || lock) return;
+    lock = true;
+    try {
+      if (forward) await book.rendition.next();
+      else await book.rendition.prev();
+      if (this.props.htmlBook === book) this.handleLocation();
+    } catch (error) {
+      console.warn("Mobile page turn failed", error);
+    } finally {
+      lock = false;
+    }
+  };
   toggleMobileChrome = () => {
     if (
       !this.mobileReader ||
@@ -503,12 +517,15 @@ class Reader extends React.Component<
                   <Trans>Back</Trans>
                 </button>
               )}
-              <button type="button" onClick={() => this.showMobilePanel("top")}>
-                <Trans>Reading Options</Trans>
-              </button>
               <span className="mobile-reader-book-title">{this.props.currentBook.name}</span>
+              <button type="button" onClick={() => this.showMobilePanel("top")}>
+                <Trans>Options</Trans>
+              </button>
             </header>
             <nav className="mobile-reader-bottombar">
+              <button type="button" aria-label={this.props.t("Previous Page")}
+                disabled={!this.props.htmlBook}
+                onClick={() => this.turnMobilePage(false)}><span aria-hidden="true">‹</span></button>
               {(["left", "bottom", "right", "tools"] as const).map((position) => (
                 <button type="button" key={position}
                   aria-expanded={this.state.mobilePanel === position}
@@ -516,6 +533,9 @@ class Reader extends React.Component<
                   <Trans>{MOBILE_PANEL_LABEL[position]}</Trans>
                 </button>
               ))}
+              <button type="button" aria-label={this.props.t("Next Page")}
+                disabled={!this.props.htmlBook}
+                onClick={() => this.turnMobilePage(true)}><span aria-hidden="true">›</span></button>
             </nav>
           </>
         )}

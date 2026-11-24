@@ -1,3 +1,4 @@
+import { isAndroid } from "../../platform";
 import { ConfigService } from "../../assets/lib/kookit-extra-browser.min";
 import { isElectron } from "react-device-detect";
 import { getIframeDoc, getIframeWin } from "./docUtil";
@@ -435,7 +436,7 @@ export const bindHtmlEvent = (
     { passive: false }
   );
 
-  if (ConfigService.getReaderConfig("isTouch") === "yes") {
+  if (!isAndroid() && ConfigService.getReaderConfig("isTouch") === "yes") {
     const mc = new Hammer(doc);
     mc.on("panleft panright panup pandown", async (event: any) => {
       if (readerMode === "scroll") {
