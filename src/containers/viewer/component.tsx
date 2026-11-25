@@ -9,6 +9,11 @@ import "./index.css";
 import { htmlMouseEvent } from "../../utils/reader/mouseEvent";
 import ImageViewer from "../../components/imageViewer";
 import { getIframeDoc } from "../../utils/reader/docUtil";
+import {
+  decideMobileGesture,
+  classifyVisibleTap,
+  shouldUseClickFallback,
+} from "../../utils/mobileTapDecision";
 import PopupBox from "../../components/popups/popupBox";
 import Note from "../../models/Note";
 import PageWidget from "../pageWidget";
@@ -596,7 +601,7 @@ class Viewer extends React.Component<MobileViewerProps, ViewerState> {
     type Sample = { id: number; x: number; y: number; at: number };
     let start: Sample | null = null;
     let active = 0;
-    let pending: { x: number; y: number; at: number } | null = null;
+    let recentTouchAt = 0;
     const blocked = (target: EventTarget | null) =>
       (target as Element | null)?.closest?.("a,button,input,select,textarea,summary,video,audio,label,[role=button],[contenteditable]") ||
       doc.getSelection()?.toString().trim() ||
@@ -620,41 +625,7 @@ class Viewer extends React.Component<MobileViewerProps, ViewerState> {
         this.mobilePageTurning = false;
       }
     };
-    doc.addEventListener("pointerdown", (event) => {
-      if (event.pointerType !== "touch") return;
-      active++;
-      pending = null;
-      start = active === 1 && event.isPrimary && !blocked(event.target)
-        ? { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() }
-        : null;
-    }, { passive: true, signal });
-    doc.addEventListener("pointercancel", (event) => {
-      if (event.pointerType !== "touch") return;
-      active = Math.max(0, active - 1);
-      start = null;
-      pending = null;
-    }, { passive: true, signal });
-    doc.addEventListener("pointerup", (event) => {
-      if (event.pointerType !== "touch") return;
-      active = Math.max(0, active - 1);
-      const origin = start;
-      start = null;
-      if (!origin || origin.id !== event.pointerId || active || blocked(event.target)) return;
-      const dx = event.clientX - origin.x;
-      const dy = event.clientY - origin.y;
-      const elapsed = Date.now() - origin.at;
-      const width = doc.defaultView?.innerWidth || 0;
-      if (!width || origin.x < 24 || origin.x > width - 24) return;
-      if (canPage() && elapsed < 700 && Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        void turn(dx < 0);
-      } else if (elapsed < 350 && Math.hypot(dx, dy) < 10) {
-        pending = { x: event.clientX, y: event.clientY, at: Date.now() };
-      }
-    }, { passive: true, signal });
-    doc.addEventListener("click", (event) => {
-      const tap = pending;
-      pending = null;
-      if (!tap || Date.now() - tap.at > 450 || event.defaultPrevented || blocked(event.target)) return;
+    const dispatchTap = (x: number, y: number) => {
       const frame = doc.defaultView?.frameElement;
       const viewport = document.getElementById("page-area")?.getBoundingClientRect();
       const rect = frame?.getBoundingClientRect();
@@ -663,19 +634,48 @@ class Viewer extends React.Component<MobileViewerProps, ViewerState> {
         const left = Math.max(0, rect.left, viewport.left);
         const bottom = Math.min(window.innerHeight, rect.bottom, viewport.bottom);
         const right = Math.min(window.innerWidth, rect.right, viewport.right);
-        const x = rect.left + tap.x;
-        const y = rect.top + tap.y;
-        if (right <= left || bottom <= top || x < left || x > right || y < top || y > bottom) return;
-        const fraction = (x - left) / (right - left);
-        if (fraction >= 0.25 && fraction <= 0.75) this.props.onMobileBodyTap?.();
-        else if (canPage()) void turn(fraction > 0.75);
+        const outerX = rect.left + x;
+        const outerY = rect.top + y;
+        const zone = classifyVisibleTap(outerX, outerY, { left, right, top, bottom }, canPage());
+        if (zone === "center") this.props.onMobileBodyTap?.();
+        else if (zone) void turn(zone === "next");
         return;
       }
       const width = doc.defaultView?.innerWidth || 0;
       const height = doc.defaultView?.innerHeight || 0;
-      if (!width || !height || tap.y < height * 0.1 || tap.y > height * 0.9) return;
-      if (tap.x >= width * 0.25 && tap.x <= width * 0.75) this.props.onMobileBodyTap?.();
-      else if (canPage()) void turn(tap.x > width * 0.75);
+      if (!width || !height || y < height * 0.1 || y > height * 0.9) return;
+      if (x >= width * 0.25 && x <= width * 0.75) this.props.onMobileBodyTap?.();
+      else if (canPage()) void turn(x > width * 0.75);
+    };
+    doc.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "touch") return;
+      active++;
+      start = active === 1 && event.isPrimary && !blocked(event.target)
+        ? { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() }
+        : null;
+    }, { passive: true, signal });
+    doc.addEventListener("pointercancel", (event) => {
+      if (event.pointerType !== "touch") return;
+      recentTouchAt = Date.now();
+      active = Math.max(0, active - 1);
+      start = null;
+    }, { passive: true, signal });
+    doc.addEventListener("pointerup", (event) => {
+      if (event.pointerType !== "touch") return;
+      const now = Date.now();
+      recentTouchAt = now; // Also suppress clicks after long-press, selection and multitouch.
+      active = Math.max(0, active - 1);
+      const origin = start;
+      start = null;
+      if (!origin || origin.id !== event.pointerId || active || blocked(event.target)) return;
+      const action = decideMobileGesture(origin, { x: event.clientX, y: event.clientY }, now, doc.defaultView?.innerWidth || 0, canPage());
+      if (action?.type === "swipe") void turn(action.forward);
+      else if (action?.type === "tap") dispatchTap(action.x, action.y);
+    }, { passive: true, signal });
+    doc.addEventListener("click", (event) => {
+      if (!event.isTrusted || event.button !== 0 || event.detail === 0) return;
+      if (!shouldUseClickFallback(recentTouchAt, Date.now(), event.defaultPrevented, !!blocked(event.target))) return;
+      dispatchTap(event.clientX, event.clientY);
     }, { signal });
   };
   handleBindGesture = () => {
