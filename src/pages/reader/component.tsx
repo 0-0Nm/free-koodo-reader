@@ -523,7 +523,7 @@ class Reader extends React.Component<
               </button>
             </header>
             <nav className="mobile-reader-bottombar">
-              <button type="button" aria-label={this.props.t("Previous Page")}
+              <button type="button" aria-label={this.props.t("Previous page")}
                 disabled={!this.props.htmlBook}
                 onClick={() => this.turnMobilePage(false)}><span aria-hidden="true">‹</span></button>
               {(["left", "bottom", "right", "tools"] as const).map((position) => (
@@ -533,7 +533,7 @@ class Reader extends React.Component<
                   <Trans>{MOBILE_PANEL_LABEL[position]}</Trans>
                 </button>
               ))}
-              <button type="button" aria-label={this.props.t("Next Page")}
+              <button type="button" aria-label={this.props.t("Next page")}
                 disabled={!this.props.htmlBook}
                 onClick={() => this.turnMobilePage(true)}><span aria-hidden="true">›</span></button>
             </nav>
