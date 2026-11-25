@@ -1,5 +1,6 @@
 // Pure input policy for the Android reader.
 const CLICK_DEDUPE_MS = 500;
+/** @returns {{type: "swipe", forward: boolean} | {type: "tap", x: number, y: number} | null} */
 export function decideMobileGesture(origin, end, now, width, canPage) {
   if (!origin || !end || !width || origin.x < 24 || origin.x > width - 24) return null;
   const dx = end.x - origin.x;
