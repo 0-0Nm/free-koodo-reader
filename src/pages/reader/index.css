@@ -352,3 +352,96 @@
 .mobile-reader-bottombar button:first-child,
 .mobile-reader-bottombar button:last-child { flex: 0 0 48px; font-size: 25px; }
 .mobile-reader-bottombar button:disabled { opacity: 0.4; }
+
+/* Compact mobile reading controls. Do not consume input while hidden. */
+.mobile-reader {
+  color-scheme: light dark;
+  --reader-line: color-mix(in srgb, CanvasText 15%, transparent);
+  --reader-chrome-top: calc(56px + env(safe-area-inset-top, 0px));
+  --reader-chrome-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+}
+.mobile-reader .mobile-reader-topbar,
+.mobile-reader .mobile-reader-sheet-header { border-bottom: 1px solid var(--reader-line); }
+.mobile-reader .mobile-reader-topbar { min-height: var(--reader-chrome-top); }
+.mobile-reader .mobile-reader-topbar button,
+.mobile-reader .mobile-reader-sheet-header button {
+  flex: 0 0 48px;
+  width: 48px;
+  line-height: 1;
+  font-size: 24px;
+}
+.mobile-reader .mobile-reader-book-title { font-size: 0.95rem; }
+.mobile-reader .mobile-reader-bottombar {
+  border-top: 1px solid var(--reader-line);
+  min-height: var(--reader-chrome-bottom);
+  padding-inline: 0;
+}
+.mobile-reader .mobile-reader-bottombar button {
+  flex: 1 1 0;
+  display: grid;
+  place-content: center;
+  gap: 3px;
+  padding: 4px;
+  font-size: 0.75rem;
+  line-height: 1.15;
+}
+.mobile-reader .mobile-reader-bottombar button span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-reader .mobile-reader-bottombar button span:first-child { font-size: 1.15rem; }
+.mobile-reader[data-reader-panel="bottom"] .mobile-reader-sheet-header {
+  top: auto;
+  bottom: calc(166px + env(safe-area-inset-bottom, 0px));
+  min-height: 48px;
+  padding-top: 0;
+  border-radius: 16px 16px 0 0;
+}
+.mobile-reader[data-reader-panel="bottom"] .progress-panel-container {
+  inset: auto 0 0 !important;
+  bottom: 0 !important;
+  height: calc(166px + env(safe-area-inset-bottom, 0px)) !important;
+}
+.mobile-reader[data-reader-panel="bottom"] .progress-panel-container .progress-panel {
+  position: relative !important;
+  left: 0 !important;
+  width: 100% !important;
+  max-width: none;
+}
+.mobile-reader .mobile-reader-page-actions { display: flex; gap: 8px; padding: 8px 16px; }
+.mobile-reader .mobile-reader-page-actions button {
+  flex: 1 1 0;
+  min-height: 48px;
+  border: 1px solid var(--reader-line);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: .85rem;
+}
+.mobile-reader .mobile-reader-tools .previous-chapter-single-container,
+.mobile-reader .mobile-reader-tools .next-chapter-single-container,
+.mobile-reader .mobile-reader-tools .reader-setting-icon-container {
+  min-height: 48px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--reader-line);
+  border-radius: 10px;
+}
+.mobile-reader .mobile-reader-reveal {
+  position: fixed;
+  right: 8px;
+  bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  z-index: 16;
+  min-width: 48px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--mobile-reader-surface);
+  color: var(--mobile-reader-text);
+  opacity: .78;
+  font: inherit;
+  font-size: 1.2rem;
+}

@@ -140,7 +140,7 @@ class Reader extends React.Component<
         ConfigService.getReaderConfig("isPreventTrigger") === "yes",
       isShowScale: false,
       isNearEdge: false,
-      mobileChrome: true,
+      mobileChrome: false,
       mobilePanel: null,
     };
   }
@@ -509,33 +509,34 @@ class Reader extends React.Component<
         className={this.mobileReader ? "viewer mobile-reader" : "viewer"}
         data-reader-panel={this.mobileReader ? this.state.mobilePanel || "none" : undefined}
       >
-        {this.mobileReader && this.state.mobileChrome && (
+        {this.mobileReader && !this.state.mobileChrome && !this.state.mobilePanel && (
+          <button type="button" className="mobile-reader-reveal" aria-label={this.props.t("More")}
+            onClick={() => this.setState({ mobileChrome: true })}>
+            <span aria-hidden="true">···</span>
+          </button>
+        )}
+        {this.mobileReader && this.state.mobileChrome && !this.state.mobilePanel && (
           <>
             <header className="mobile-reader-topbar">
               {isAndroid() && (
-                <button type="button" onClick={() => this.androidBack?.back()}>
-                  <Trans>Back</Trans>
-                </button>
+                <button type="button" aria-label={this.props.t("Back")}
+                  onClick={() => this.androidBack?.back()}><span aria-hidden="true">‹</span></button>
               )}
               <span className="mobile-reader-book-title">{this.props.currentBook.name}</span>
-              <button type="button" onClick={() => this.showMobilePanel("top")}>
-                <Trans>Options</Trans>
-              </button>
+              <button type="button" aria-label={this.props.t("More")}
+                onClick={() => this.showMobilePanel("top")}><span aria-hidden="true">···</span></button>
             </header>
             <nav className="mobile-reader-bottombar">
-              <button type="button" aria-label={this.props.t("Previous page")}
-                disabled={!this.props.htmlBook}
-                onClick={() => this.turnMobilePage(false)}><span aria-hidden="true">‹</span></button>
-              {(["left", "bottom", "right", "tools"] as const).map((position) => (
+              {([
+                ["left", "≡"], ["bottom", "⇥"], ["right", "Aa"], ["tools", "···"],
+              ] as const).map(([position, icon]) => (
                 <button type="button" key={position}
                   aria-expanded={this.state.mobilePanel === position}
                   onClick={() => this.showMobilePanel(position)}>
-                  <Trans>{MOBILE_PANEL_LABEL[position]}</Trans>
+                  <span aria-hidden="true">{icon}</span>
+                  <span><Trans>{MOBILE_PANEL_LABEL[position]}</Trans></span>
                 </button>
               ))}
-              <button type="button" aria-label={this.props.t("Next page")}
-                disabled={!this.props.htmlBook}
-                onClick={() => this.turnMobilePage(true)}><span aria-hidden="true">›</span></button>
             </nav>
           </>
         )}
@@ -544,7 +545,9 @@ class Reader extends React.Component<
             <div className="mobile-reader-scrim" onClick={this.closeMobilePanel} />
             <div className="mobile-reader-sheet-header">
               <strong><Trans>{MOBILE_PANEL_LABEL[this.state.mobilePanel]}</Trans></strong>
-              <button type="button" onClick={this.closeMobilePanel}><Trans>Close</Trans></button>
+              <button type="button" aria-label={this.props.t("Close")} onClick={this.closeMobilePanel}>
+                <span aria-hidden="true">×</span>
+              </button>
             </div>
           </>
         )}
@@ -1010,6 +1013,16 @@ class Reader extends React.Component<
           }
         >
           <ProgressPanel />
+          {this.mobileReader && (
+            <div className="mobile-reader-page-actions">
+              <button type="button" disabled={!this.props.htmlBook} onClick={() => this.turnMobilePage(false)}>
+                <Trans>Previous page</Trans>
+              </button>
+              <button type="button" disabled={!this.props.htmlBook} onClick={() => this.turnMobilePage(true)}>
+                <Trans>Next page</Trans>
+              </button>
+            </div>
+          )}
         </div>
         <div
           className="operation-panel-container"

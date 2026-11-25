@@ -85,11 +85,30 @@ class Viewer extends React.Component<MobileViewerProps, ViewerState> {
     this.props.handleFetchBooks();
     this.props.handleFetchPlugins();
   }
+  readerPageWidth = (
+    mode: string,
+    scale: string,
+    margin: number,
+    navLocked: boolean,
+    settingLocked: boolean
+  ) => {
+    const format = this.props.currentBook.format.toUpperCase();
+    if (isAndroid() && ["EPUB", "TXT", "MD", "FB2", "MOBI", "AZW", "AZW3", "DOCX"].includes(format)) {
+      const viewport = document.body.clientWidth;
+      if (viewport >= 72) {
+        // Keep the engine's 48px alignment; mobile panels overlay the page.
+        const gutter = Math.min(32, Math.max(8, Number.isFinite(margin) ? margin : 8));
+        const width = Math.floor((viewport - 2 * gutter) / 48) * 48;
+        if (width > 0) return { pageOffset: `${(viewport - width) / 2}px`, pageWidth: `${width}px` };
+      }
+    }
+    return getPageWidth(mode, scale, margin, navLocked, settingLocked);
+  };
   componentDidMount() {
     this.handleRenderBook();
     //make sure page width is always 12 times, section = Math.floor(element.clientWidth / 12), or text will be blocked
     this.setState(
-      getPageWidth(
+      this.readerPageWidth(
         this.props.readerMode,
         this.props.scale,
         parseInt(this.props.margin),
@@ -105,7 +124,7 @@ class Viewer extends React.Component<MobileViewerProps, ViewerState> {
     this.props.handleRenderBookFunc(this.handleRenderBook);
     this.resizeHandler = throttle(() => {
       this.setState(
-        getPageWidth(
+        this.readerPageWidth(
           this.props.readerMode,
           this.props.scale,
           parseInt(this.props.margin),
@@ -138,7 +157,7 @@ class Viewer extends React.Component<MobileViewerProps, ViewerState> {
       nextProps.isDockedRight !== this.props.isDockedRight
     ) {
       this.setState(
-        getPageWidth(
+        this.readerPageWidth(
           nextProps.readerMode,
           nextProps.scale,
           parseInt(nextProps.margin),
@@ -636,6 +655,22 @@ class Viewer extends React.Component<MobileViewerProps, ViewerState> {
       const tap = pending;
       pending = null;
       if (!tap || Date.now() - tap.at > 450 || event.defaultPrevented || blocked(event.target)) return;
+      const frame = doc.defaultView?.frameElement;
+      const viewport = document.getElementById("page-area")?.getBoundingClientRect();
+      const rect = frame?.getBoundingClientRect();
+      if (rect && viewport && frame?.ownerDocument === document) {
+        const top = Math.max(0, rect.top, viewport.top);
+        const left = Math.max(0, rect.left, viewport.left);
+        const bottom = Math.min(window.innerHeight, rect.bottom, viewport.bottom);
+        const right = Math.min(window.innerWidth, rect.right, viewport.right);
+        const x = rect.left + tap.x;
+        const y = rect.top + tap.y;
+        if (right <= left || bottom <= top || x < left || x > right || y < top || y > bottom) return;
+        const fraction = (x - left) / (right - left);
+        if (fraction >= 0.25 && fraction <= 0.75) this.props.onMobileBodyTap?.();
+        else if (canPage()) void turn(fraction > 0.75);
+        return;
+      }
       const width = doc.defaultView?.innerWidth || 0;
       const height = doc.defaultView?.innerHeight || 0;
       if (!width || !height || tap.y < height * 0.1 || tap.y > height * 0.9) return;
